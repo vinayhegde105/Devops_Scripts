@@ -1,6 +1,6 @@
 #!/bin/bash
 
-usename = 'azureuser'
+username = 'azureuser'
 
 export VSTS_AGENT_INPUT_URL=""
 export VSTS_AGENT_INPUT_AUTH=pat
