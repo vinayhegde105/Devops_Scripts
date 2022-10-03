@@ -1,0 +1,138 @@
+resources:
+- repo: self
+  fetchDepth: 1
+pool: $(pool)
+# pool:
+#   vmImage: ubuntu-20.04
+trigger:
+  paths:
+    include:
+      - '*'
+    exclude:
+      - azure-pipelines.yml
+variables:
+- group: pipeline_vars
+  # TargetFramework: 'netcoreapp3.1'
+  # BuildConfiguration: 'Release'
+  # DockerImageName: 'nextgendev/clouddemo'
+stages :
+  - stage: BUILDandPUSH
+    displayName: BUILDandPUSH
+    jobs:
+    - job: Apply
+      continueOnError: false
+      timeoutInMinutes: 0
+      steps:
+      - task: DotNetCoreCLI@2
+        displayName: Publish
+        inputs:
+          projects: 'applications/clouddemo/netcore/CloudDemo.MvcCore.sln'
+          publishWebProjects: false
+          command: publish
+          arguments: '--configuration $(BuildConfiguration) --framework=$(TargetFramework)'
+          zipAfterPublish: false
+          modifyOutputPath: false
+      - task: CmdLine@1
+        displayName: 'Lock image version in deployment.yaml'
+        inputs:
+          filename: /bin/bash
+          arguments: '-c "awk ''{gsub(\"CLOUDDEMO_IMAGE\", \"gcr.io/$(DockerImageName):$(Build.BuildId)\", $0); print}'' applications/clouddemo/netcore/deployment.yaml > $(build.artifactstagingdirectory)/deployment.yaml"'
+      - task: PublishBuildArtifacts@1
+        displayName: 'Publish Artifact'
+        inputs:
+          PathtoPublish: '$(build.artifactstagingdirectory)'
+      - task: Docker@2
+        displayName: 'Login to Container Registry'
+        inputs:
+          command: login
+          containerRegistry: 'gcr-registry'
+      - task: Docker@2
+        displayName: 'Build and push image'
+        inputs:
+          Dockerfile: 'applications/clouddemo/netcore/Dockerfile'
+          command: buildAndPush
+          repository: '$(DockerImageName)'
+          
+
+      # - download: current
+      #   artifact: drop/deployment.yaml
+
+      - script: |
+            git init
+            git config --global user.name vinay
+            git config --global user.email vinay@gmail.com
+            git config --global credential.authority basic
+            git config --global http.sslVerify "false"
+            git add .
+            git commit -m "123"
+            git branch -M main
+            B64_PAT=$(printf "%s"":$(PAT_TOKEN)" | base64)
+            git -c http.extraHeader="Authorization: Basic ${B64_PAT}" push --mirror https://dev.azure.com/nsitmspdevops/CICD/_git/argotest
+            echo "git mirror done"
+        workingDirectory: $(build.artifactstagingdirectory)
+      
+
+  # - stage: DEVELOPMENT_DEPLOY
+  #   displayName: DEVELOPMENT_DEPLOY
+  #   dependsOn: BUILDandPUSH
+  #   jobs:
+  #   - deployment: Deploy
+  #     displayName: DEVELOPMENT_DEPLOY
+  #     pool: $(pool)
+  #     # pool:
+  #     #   vmImage: 'ubuntu-latest'
+  #     environment: 'DEV'
+  #     strategy:
+  #       runOnce:
+  #         deploy:
+  #           steps:
+  #           - task: KubernetesManifest@0
+  #             displayName: DEVELOPMENT_DEPLOY
+  #             inputs:
+  #               kubernetesServiceConnection: 'k8s-dev'
+  #               namespace: default
+  #               manifests: $(Agent.BuildDirectory)/drop/deployment.yaml
+
+
+  # - stage: TESTING_DEPLOY
+  #   displayName: TESTING_DEPLOY
+  #   dependsOn: DEVELOPMENT_DEPLOY
+  #   jobs:
+  #   - deployment: Deploy
+  #     displayName: TESTING_DEPLOY
+  #     pool: $(pool)
+  #     # pool:
+  #     #   vmImage: 'ubuntu-latest'
+  #     environment: 'TEST'
+  #     strategy:
+  #       runOnce:
+  #         deploy:
+  #           steps:
+  #           - task: KubernetesManifest@0
+  #             displayName: TESTING_DEPLOY
+  #             inputs:
+  #               kubernetesServiceConnection: 'k8s-test'
+  #               namespace: default
+  #               manifests: $(Agent.BuildDirectory)/drop/deployment.yaml
+
+
+  # - stage: PRODUCTION_DEPLOY
+  #   displayName: PRODUCTION_DEPLOY
+  #   dependsOn: TESTING_DEPLOY
+  #   jobs:
+  #   - deployment: Deploy
+  #     displayName: PRODUCTION_DEPLOY
+  #     pool: $(pool)
+  #     # pool:
+  #     #   vmImage: 'ubuntu-latest'
+  #     environment: 'PROD'
+  #     strategy:
+  #       runOnce:
+  #         deploy:
+  #           steps:
+  #           - task: KubernetesManifest@0
+  #             displayName: PRODUCTION_DEPLOY
+  #             inputs:
+  #               kubernetesServiceConnection: 'k8s-prod'
+  #               namespace: default
+  #               manifests: $(Agent.BuildDirectory)/drop/deployment.yaml
