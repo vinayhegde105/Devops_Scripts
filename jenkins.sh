@@ -24,7 +24,7 @@ sudo apt-get install libicu-dev libfreetype6 libssl-dev libpng-dev libjpeg-dev
 
 ## Then build PhantomJS
 cd /usr/local/share
-git clone git://github.com/ariya/phantomjs.git
+git clone https://github.com/ariya/phantomjs.git
 cd phantomjs
 git checkout 1.9
 ./build.sh
